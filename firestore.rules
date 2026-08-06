@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if request is by the owner of the resource
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. User Profiles and Subcollections (Transactions, Income, Expenses, Budgets, Goals, Reports, Notifications)
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 3. Registered Emails (allow check for email existence on login, and registration on signup)
+    match /registered_emails/{email} {
+      allow read, write: if true;
+    }
+
+    // 4. Global legacy collections for data migration to subcollections
+    match /transactions/{id} {
+      allow read, delete: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
+      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+    match /budgets/{id} {
+      allow read, delete: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
+      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+    match /goals/{id} {
+      allow read, delete: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
+      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+    match /notifications/{id} {
+      allow read, delete: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
+      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
