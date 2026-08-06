@@ -1,48 +1,52 @@
-# 🏥 CareFlow – Hospital Operation Scheduler
+# 💰 BudgetBloom – Personal Finance Management Platform
 
-CareFlow is a hospital operation scheduling system designed to simplify surgery scheduling, doctor availability management, and operation room allocation. The platform minimizes scheduling conflicts and improves hospital workflow.
+BudgetBloom is a personal finance management application that helps users track income, expenses, budgets, savings goals, and financial reports through an intuitive dashboard.
 
 ## 🚀 Features
 
-- Surgery Scheduling
-- Doctor Availability Management
-- Operation Room Allocation
-- Patient Records
-- Appointment Management
-- Admin Dashboard
-- Responsive UI
+- Income & Expense Tracking
+- Budget Management
+- Savings Goals
+- Financial Reports
+- PDF Export
+- Notification Reminders
+- User Authentication
+- Responsive Dashboard
 
 ## 🛠️ Tech Stack
 
 - React.js
-- Node.js
-- MongoDB
-- Express.js
-- JavaScript
+- TypeScript
+- Firebase
+- Cloud Firestore
+- Tailwind CSS
+- Vite
 
 ## 📂 Project Structure
 
 ```
-client/
-server/
-database/
+src/
+components/
+pages/
+utils/
+firebase/
 ```
 
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/Meghana-290/careflow.git
-cd careflow
+git clone https://github.com/Meghana-290/budgetbloom.git
+cd budgetbloom
 npm install
 npm run dev
 ```
 
 ## 🎯 Future Improvements
 
-- Email Notifications
-- Patient Portal
-- AI Surgery Scheduling
-- Hospital Analytics
+- AI Expense Insights
+- Investment Tracker
+- Bank API Integration
+- Monthly Analytics
 
 ## 👩‍💻 Author
 
