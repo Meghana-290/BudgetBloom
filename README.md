@@ -1,20 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 🏥 CareFlow – Hospital Operation Scheduler
 
-# Run and deploy your AI Studio app
+CareFlow is a hospital operation scheduling system designed to simplify surgery scheduling, doctor availability management, and operation room allocation. The platform minimizes scheduling conflicts and improves hospital workflow.
 
-This contains everything you need to run your app locally.
+## 🚀 Features
 
-View your app in AI Studio: https://ai.studio/apps/c77e67b2-a495-42de-a5f4-30fd05164efa
+- Surgery Scheduling
+- Doctor Availability Management
+- Operation Room Allocation
+- Patient Records
+- Appointment Management
+- Admin Dashboard
+- Responsive UI
 
-## Run Locally
+## 🛠️ Tech Stack
 
-**Prerequisites:**  Node.js
+- React.js
+- Node.js
+- MongoDB
+- Express.js
+- JavaScript
 
+## 📂 Project Structure
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```
+client/
+server/
+database/
+```
+
+## 📦 Installation
+
+```bash
+git clone https://github.com/Meghana-290/careflow.git
+cd careflow
+npm install
+npm run dev
+```
+
+## 🎯 Future Improvements
+
+- Email Notifications
+- Patient Portal
+- AI Surgery Scheduling
+- Hospital Analytics
+
+## 👩‍💻 Author
+
+**Meghana Patil**
