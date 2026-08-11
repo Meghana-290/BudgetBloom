@@ -36,15 +36,9 @@ export default function App() {
   const [lockError, setLockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
 
-  // Page Routing State - reading initial route from path hash
-  const [currentPage, setCurrentPage] = useState<Page>(() => {
-    const hash = window.location.hash.slice(1);
-    const pageValues = Object.values(Page) as string[];
-    if (hash && pageValues.includes(hash)) {
-      return hash as Page;
-    }
-    return Page.LANDING;
-  });
+  // Page state is kept internally so the public URL stays clean.
+  // Navigation no longer writes #landing, #dashboard, etc. into the browser URL.
+  const [currentPage, setCurrentPage] = useState<Page>(Page.LANDING);
   const [collapsed, setCollapsed] = useState(false);
 
   // Authentication States
@@ -116,7 +110,6 @@ export default function App() {
             setGoals([]);
             setAppNotifications([]);
             setCurrentPage(Page.LANDING);
-            window.location.hash = Page.LANDING;
             setAuthLoading(false);
             return;
           } else if (inactiveTime > TWENTY_FOUR_HOURS_MS) {
@@ -132,16 +125,9 @@ export default function App() {
         }
         setUid(user.uid);
         
-        // Sync with page hash or fallback to dashboard
-        const currentHash = window.location.hash.slice(1);
-        const pageValues = Object.values(Page) as string[];
-        if (currentHash && pageValues.includes(currentHash) && currentHash !== Page.LANDING) {
-          setCurrentPage(currentHash as Page);
-          window.location.hash = currentHash;
-        } else {
-          setCurrentPage(Page.DASHBOARD);
-          window.location.hash = Page.DASHBOARD;
-        }
+        // After login, always open the dashboard.
+        // The browser URL remains clean (no #dashboard).
+        setCurrentPage(Page.DASHBOARD);
       } else {
         setUid(null);
         setProfile(null);
@@ -151,7 +137,6 @@ export default function App() {
         setGoals([]);
         setAppNotifications([]);
         setCurrentPage(Page.LANDING);
-        window.location.hash = Page.LANDING;
       }
       setAuthLoading(false);
     });
@@ -159,59 +144,8 @@ export default function App() {
     return () => unsubscribeAuth();
   }, []);
 
-  // Sync state changes from url hash securely (e.g. browser back/forward buttons)
-  useEffect(() => {
-    const handleHashChange = () => {
-      const currentHash = window.location.hash.slice(1);
-      if (!currentHash) {
-        if (uid) {
-          setCurrentPage(Page.DASHBOARD);
-          window.location.hash = Page.DASHBOARD;
-        } else {
-          setCurrentPage(Page.LANDING);
-          window.location.hash = Page.LANDING;
-        }
-        return;
-      }
-
-      const pageValues = Object.values(Page) as string[];
-      if (pageValues.includes(currentHash)) {
-        const targetPage = currentHash as Page;
-        if (!uid && targetPage !== Page.LANDING) {
-          // Block navigation if logged out
-          setCurrentPage(Page.LANDING);
-          window.location.hash = Page.LANDING;
-        } else if (uid && targetPage === Page.LANDING) {
-          // If logged in and page is landing page, redirect to dashboard
-          setCurrentPage(Page.DASHBOARD);
-          window.location.hash = Page.DASHBOARD;
-        } else {
-          setCurrentPage(targetPage);
-        }
-      } else {
-        if (uid) {
-          setCurrentPage(Page.DASHBOARD);
-          window.location.hash = Page.DASHBOARD;
-        } else {
-          setCurrentPage(Page.LANDING);
-          window.location.hash = Page.LANDING;
-        }
-      }
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [uid]);
-
-  // Handle programmatically-triggered navigation updates (e.g., clicking sidebar links)
-  useEffect(() => {
-    if (currentPage) {
-      if (window.location.hash !== `#${currentPage}`) {
-        window.location.hash = currentPage;
-      }
-    }
-  }, [currentPage]);
-
+  // Navigation is handled entirely by React state.
+  // No URL hash is used, so the public URL stays clean.
   // Keep track of user interactions to maintain fresh lastActiveAt
   useEffect(() => {
     if (!uid || isLocked) return;
@@ -635,7 +569,6 @@ export default function App() {
       await signOut(auth);
       setUid(null);
       setCurrentPage(Page.LANDING);
-      window.location.hash = Page.LANDING;
       setIsLogoutModalOpen(false);
     } catch (error) {
       console.error('Error during log out:', error);
@@ -728,7 +661,6 @@ export default function App() {
       setGoals([]);
       setAppNotifications([]);
       setCurrentPage(Page.LANDING);
-      window.location.hash = Page.LANDING;
     } catch (err) {
       console.error('Sign out from locked screen failed:', err);
     } finally {
@@ -761,7 +693,6 @@ export default function App() {
           safeStorage.setItem('budgetbloom_last_active_at', Date.now().toString());
           setUid(id);
           setCurrentPage(Page.DASHBOARD);
-          window.location.hash = Page.DASHBOARD;
         }}
       />
     );
