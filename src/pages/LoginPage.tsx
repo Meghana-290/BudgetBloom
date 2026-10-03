@@ -103,7 +103,36 @@ export default function LoginPage({ onAuthSuccess }: LoginPageProps) {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
+      const ensureUserProfile = async (user: any, fallbackName?: string) => {
+    const existingProfile = await getUserProfile(user.uid);
 
+    const authName = user.displayName || fallbackName || '';
+    const authEmail = user.email || '';
+
+    if (!existingProfile) {
+      await createOrUpdateProfile(user.uid, {
+        uid: user.uid,
+        email: authEmail,
+        displayName: authName || 'BudgetBloom Member',
+        name: authName || 'BudgetBloom Member',
+        photoURL: user.photoURL || '',
+        currency: 'INR',
+        theme: 'light',
+        createdAt: new Date().toISOString()
+      } as any);
+
+      return;
+    }
+
+    // Keep existing profile data, but make sure basic Auth information exists.
+    await createOrUpdateProfile(user.uid, {
+      uid: user.uid,
+      email: existingProfile.email || authEmail,
+      displayName: existingProfile.displayName || authName || 'BudgetBloom Member',
+      name: existingProfile.name || authName || 'BudgetBloom Member',
+      photoURL: existingProfile.photoURL || user.photoURL || ''
+    } as any);
+  };
   // Read saved email if Remember Me was selected earlier
   useEffect(() => {
     const savedEmail = safeStorage.getItem('budgetbloom_remembered_email');
@@ -118,261 +147,344 @@ export default function LoginPage({ onAuthSuccess }: LoginPageProps) {
     showToastMsg('Biometric sensor activated. Please place your finger on the sensor.', 'success');
   };
 
-  // Google SSO Auth
-  const handleGoogleAuth = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      // 3. Google Sign-In
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      // 7. Debugging: Print core variables and status to the browser console
-      console.log("[Google Auth Debug] Firebase Project ID:", auth.app.options.projectId);
-      console.log("[Google Auth Debug] Authenticated User UID:", user.uid);
-      console.log("[Google Auth Debug] Authenticated User Email:", user.email);
-      
-      // 8. Verify Data: Fetch existing data from specified collections
-      const txSnap = await getDocs(collection(db, 'users', user.uid, 'transactions'));
-      const budgetsSnap = await getDocs(collection(db, 'users', user.uid, 'budgets'));
-      const goalsSnap = await getDocs(collection(db, 'users', user.uid, 'goals'));
-      const notificationsSnap = await getDocs(collection(db, 'users', user.uid, 'notifications'));
+// Google SSO Auth
+const handleGoogleAuth = async (e: React.MouseEvent) => {
+  e.preventDefault();
+  setLoading(true);
 
-      console.log(`[Google Auth Data Verification] Extracted counts for user ${user.uid}:`, {
-        transactions: txSnap.size,
-        budgets: budgetsSnap.size,
-        goals: goalsSnap.size,
-        notifications: notificationsSnap.size
-      });
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    const googleEmail = (user.email || '').toLowerCase();
 
-      // 4. User Creation and Persistence checks
-      const existingProfile = await getUserProfile(user.uid);
-      
-      if (!existingProfile) {
-        console.log("[Google Auth] Creating new user profile document because profile does not exist...");
-        // First-time user: Create a new document in Firestore with precise details
-        await createOrUpdateProfile(user.uid, {
-          uid: user.uid,
-          email: user.email || '',
-          displayName: user.displayName || 'BudgetBloom Member',
-          name: user.displayName || 'BudgetBloom Member',
-          photoURL: user.photoURL || '',
-          currency: 'INR',
-          theme: 'light',
-          createdAt: new Date().toISOString()
-        } as any);
-        
-        try {
-          await setDoc(doc(db, 'registered_emails', (user.email || '').toLowerCase()), {
-            uid: user.uid,
-            registered: true
-          });
-        } catch (dbErr) {
-          console.warn('Failed to write to registered_emails:', dbErr);
-        }
-        showToastMsg('Account created successfully!', 'success');
-      } else {
-        console.log("[Google Auth] Profile exists. Do NOT overwrite existing user data.");
-        // Returning user: Direct login, no duplicates, do not overwrite custom data
-        try {
-          await setDoc(doc(db, 'registered_emails', (user.email || '').toLowerCase()), {
-            uid: user.uid,
-            registered: true
-          }, { merge: true });
-        } catch (dbErr) {
-          console.warn('Failed to write to registered_emails:', dbErr);
-        }
-        showToastMsg('Welcome back!', 'success');
+    if (!googleEmail) {
+      await auth.signOut();
+      showToastMsg('Unable to get your Google email address.', 'error');
+      return;
+    }
+
+    console.log('[Google Auth Debug] Google User UID:', user.uid);
+    console.log('[Google Auth Debug] Google User Email:', googleEmail);
+
+    // Check whether a BudgetBloom account already exists
+    const emailDoc = await getDoc(
+      doc(db, 'registered_emails', googleEmail)
+    );
+
+    const accountExists = emailDoc.exists();
+
+    // GOOGLE SIGN-UP
+    if (viewMode === 'register') {
+      if (accountExists) {
+        await auth.signOut();
+
+        showToastMsg(
+          'An account already exists with this email. Please log in instead.',
+          'error'
+        );
+
+        return;
       }
 
-      onAuthSuccess(user.uid);
-    } catch (err: any) {
-      // 7. Print exact error stack if Google Sign-In fails
-      console.error("[Google Auth Error] Full error stack:", err.stack || err);
-      
-      // 6. Error Handling: Replace raw Firebase errors with friendly messages
-      let msg = 'Google Sign-In failed. Please try again.';
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        msg = 'Google Sign-In cancelled.';
-      } else if (err.code === 'auth/network-request-failed') {
-        msg = 'Network error. Check your connection.';
-      }
-      
-      showToastMsg(msg, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Create BudgetBloom profile from Google account information
+      await ensureUserProfile(user);
 
-  // Credentials sign in
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const trimmedEmail = email.trim();
-    const trimmedPassword = password;
-
-    if (!trimmedEmail || !trimmedPassword) {
-      showToastMsg('Please enter email and password.', 'error');
-      return;
-    }
-
-    // Email format validation (standard regex)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      showToastMsg('Please enter a valid email address.', 'error');
-      return;
-    }
-
-    if (trimmedPassword.length < 6) {
-      showToastMsg('Password must be at least 6 characters.', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
-      if (rememberMe) {
-        safeStorage.setItem('budgetbloom_remembered_email', trimmedEmail);
-      } else {
-        safeStorage.removeItem('budgetbloom_remembered_email');
-      }
-
-      // Auto register/ensure email in registered_emails collection on success
-      try {
-        await setDoc(doc(db, 'registered_emails', trimmedEmail.toLowerCase()), {
-          uid: result.user.uid,
-          registered: true
-        }, { merge: true });
-      } catch (dbErr) {
-        console.warn('Failed to save to registered_emails:', dbErr);
-      }
-
-      showToastMsg('Welcome back!', 'success');
-      onAuthSuccess(result.user.uid);
-    } catch (err: any) {
-      console.error(err);
-      
-      // Look up if user has an email registration record
-      let userExistsInDb = true;
-      try {
-        const emailDoc = await getDoc(doc(db, 'registered_emails', trimmedEmail.toLowerCase()));
-        userExistsInDb = emailDoc.exists();
-      } catch (dbErr) {
-        console.warn('Failed to verify registered_emails:', dbErr);
-      }
-
-      let msg = 'Invalid email or wrong password.';
-      if (err.code === 'auth/invalid-email') {
-        msg = 'Please enter a valid email address.';
-      } else if (err.code === 'auth/user-not-found') {
-        msg = 'Account not found. Please create an account first.';
-      } else if (err.code === 'auth/wrong-password') {
-        msg = 'Incorrect password. Please try again.';
-      } else if (err.code === 'auth/invalid-credential') {
-        if (!userExistsInDb) {
-          msg = 'Account not found. Please create an account first.';
-        } else {
-          msg = 'Incorrect password. Please try again.';
-        }
-      } else if (err.code === 'auth/operation-not-allowed') {
-        msg = 'Email/Password sign-in is not enabled in Firebase Console.';
-        setProviderError({ provider: 'Email/Password' });
-      } else if (err.code === 'auth/network-request-failed') {
-        msg = 'Network error. Please check your connection.';
-      }
-      showToastMsg(msg, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Credentials signup
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const trimmedName = fullName.trim();
-    const trimmedEmail = email.trim();
-    const trimmedPassword = password;
-    const trimmedConfirmPassword = confirmPassword;
-
-    if (!trimmedName) {
-      showToastMsg('Please enter your full name.', 'error');
-      return;
-    }
-
-    if (!trimmedEmail || !trimmedPassword || !trimmedConfirmPassword) {
-      showToastMsg('Please fill in all registration fields.', 'error');
-      return;
-    }
-
-    // Email format validation (standard regex)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      showToastMsg('Please enter a valid email address.', 'error');
-      return;
-    }
-    
-    if (trimmedPassword !== trimmedConfirmPassword) {
-      showToastMsg('Passwords do not match.', 'error');
-      return;
-    }
-
-    if (trimmedPassword.length < 6) {
-      showToastMsg('Password must be at least 6 characters.', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
-      const user = result.user;
-
-      // First-time credentials register: Create User profile with accurate mandatory properties as per requirement 7 & 11
-      await createOrUpdateProfile(user.uid, {
-        uid: user.uid,
-        email: user.email || trimmedEmail,
-        displayName: trimmedName,
-        name: trimmedName,
-        photoURL: user.photoURL || '',
-        currency: 'INR',
-        theme: 'light',
-        createdAt: new Date().toISOString()
-      } as any);
-
-      // Register email address mapping in registered_emails collection to prevent future login issues
-      try {
-        await setDoc(doc(db, 'registered_emails', trimmedEmail.toLowerCase()), {
+      await setDoc(
+        doc(db, 'registered_emails', googleEmail),
+        {
           uid: user.uid,
           registered: true
-        });
-      } catch (dbErr) {
-        console.warn('Failed to write to registered_emails:', dbErr);
-      }
+        },
+        { merge: true }
+      );
 
       showToastMsg('Account created successfully!', 'success');
       onAuthSuccess(user.uid);
-    } catch (err: any) {
-      console.error(err);
-      let msg = 'Registration failed.';
-      if (err.code === 'auth/email-already-in-use') {
-        msg = 'Account already exists with this email.';
-      } else if (err.code === 'auth/invalid-email') {
-        msg = 'Please enter a valid email address.';
-      } else if (err.code === 'auth/weak-password') {
-        msg = 'Password is too weak. Must be at least 6 characters.';
-      } else if (err.code === 'auth/operation-not-allowed') {
-        msg = 'Email/Password sign-up is not enabled in Firebase Console.';
-        setProviderError({ provider: 'Email/Password' });
-      } else if (err.code === 'auth/network-request-failed') {
-        msg = 'Network error. Please check your connection.';
-      }
-      showToastMsg(msg, 'error');
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
 
+    // GOOGLE LOGIN
+    if (!accountExists) {
+      await auth.signOut();
+
+      showToastMsg(
+        'No account found with this email. Please sign up first.',
+        'error'
+      );
+
+      return;
+    }
+
+    // Automatically populate/complete profile from Google account
+    await ensureUserProfile(user);
+
+    await setDoc(
+      doc(db, 'registered_emails', googleEmail),
+      {
+        uid: user.uid,
+        registered: true
+      },
+      { merge: true }
+    );
+
+    showToastMsg('Welcome back!', 'success');
+    onAuthSuccess(user.uid);
+
+  } catch (err: any) {
+    console.error(
+      '[Google Auth Error] Full error stack:',
+      err.stack || err
+    );
+
+    let msg = 'Google Sign-In failed. Please try again.';
+
+    if (
+      err.code === 'auth/popup-closed-by-user' ||
+      err.code === 'auth/cancelled-popup-request'
+    ) {
+      msg = 'Google Sign-In cancelled.';
+    } else if (err.code === 'auth/network-request-failed') {
+      msg = 'Network error. Please check your connection.';
+    }
+
+    showToastMsg(msg, 'error');
+
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Credentials sign in manual login
+
+const handleLoginSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  const trimmedEmail = email.trim();
+  const trimmedPassword = password;
+
+  if (!trimmedEmail || !trimmedPassword) {
+    showToastMsg('Please enter email and password.', 'error');
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailRegex.test(trimmedEmail)) {
+    showToastMsg('Please enter a valid email address.', 'error');
+    return;
+  }
+
+  if (trimmedPassword.length < 6) {
+    showToastMsg('Password must be at least 6 characters.', 'error');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const result = await signInWithEmailAndPassword(
+      auth,
+      trimmedEmail,
+      trimmedPassword
+    );
+
+    if (rememberMe) {
+      safeStorage.setItem(
+        'budgetbloom_remembered_email',
+        trimmedEmail
+      );
+    } else {
+      safeStorage.removeItem('budgetbloom_remembered_email');
+    }
+
+    // Make sure the user's BudgetBloom profile exists
+    await ensureUserProfile(result.user);
+
+    try {
+      await setDoc(
+        doc(db, 'registered_emails', trimmedEmail.toLowerCase()),
+        {
+          uid: result.user.uid,
+          registered: true
+        },
+        { merge: true }
+      );
+    } catch (dbErr) {
+      console.warn('Failed to save to registered_emails:', dbErr);
+    }
+
+    showToastMsg('Welcome back!', 'success');
+    onAuthSuccess(result.user.uid);
+
+  } catch (err: any) {
+    console.error(err);
+
+    let userExistsInDb = true;
+
+    try {
+      const emailDoc = await getDoc(
+        doc(db, 'registered_emails', trimmedEmail.toLowerCase())
+      );
+
+      userExistsInDb = emailDoc.exists();
+
+    } catch (dbErr) {
+      console.warn('Failed to verify registered_emails:', dbErr);
+    }
+
+    let msg = 'Invalid email or wrong password.';
+
+    if (err.code === 'auth/invalid-email') {
+      msg = 'Please enter a valid email address.';
+
+    } else if (err.code === 'auth/user-not-found') {
+      msg = 'Account not found. Please create an account first.';
+
+    } else if (err.code === 'auth/wrong-password') {
+      msg = 'Incorrect password. Please try again.';
+
+    } else if (err.code === 'auth/invalid-credential') {
+      if (!userExistsInDb) {
+        msg = 'Account not found. Please create an account first.';
+      } else {
+        msg = 'Incorrect password. Please try again.';
+      }
+
+    } else if (err.code === 'auth/operation-not-allowed') {
+      msg = 'Email/Password sign-in is not enabled in Firebase Console.';
+      setProviderError({ provider: 'Email/Password' });
+
+    } else if (err.code === 'auth/network-request-failed') {
+      msg = 'Network error. Please check your connection.';
+    }
+
+    showToastMsg(msg, 'error');
+
+  } finally {
+    setLoading(false);
+  }
+};
+  
+  // Credentials signup manual
+
+const handleRegisterSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  const trimmedName = fullName.trim();
+  const trimmedEmail = email.trim();
+  const trimmedPassword = password;
+  const trimmedConfirmPassword = confirmPassword;
+
+  if (!trimmedName) {
+    showToastMsg('Please enter your full name.', 'error');
+    return;
+  }
+
+  if (!trimmedEmail || !trimmedPassword || !trimmedConfirmPassword) {
+    showToastMsg('Please fill in all registration fields.', 'error');
+    return;
+  }
+
+  // Email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailRegex.test(trimmedEmail)) {
+    showToastMsg('Please enter a valid email address.', 'error');
+    return;
+  }
+
+  if (trimmedPassword !== trimmedConfirmPassword) {
+    showToastMsg('Passwords do not match.', 'error');
+    return;
+  }
+
+  if (trimmedPassword.length < 6) {
+    showToastMsg('Password must be at least 6 characters.', 'error');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const normalizedEmail = trimmedEmail.toLowerCase();
+
+    // Check if a BudgetBloom account already exists
+    const existingEmailDoc = await getDoc(
+      doc(db, 'registered_emails', normalizedEmail)
+    );
+
+    if (existingEmailDoc.exists()) {
+      showToastMsg(
+        'An account already exists with this email. Please log in instead.',
+        'error'
+      );
+      return;
+    }
+
+    // Create Firebase Authentication account
+    const result = await createUserWithEmailAndPassword(
+      auth,
+      trimmedEmail,
+      trimmedPassword
+    );
+
+    const user = result.user;
+
+    // Create BudgetBloom profile using signup information
+    await createOrUpdateProfile(user.uid, {
+      uid: user.uid,
+      email: user.email || trimmedEmail,
+      displayName: trimmedName,
+      name: trimmedName,
+      photoURL: user.photoURL || '',
+      currency: 'INR',
+      theme: 'light',
+      createdAt: new Date().toISOString()
+    } as any);
+
+    // Register email address
+    try {
+      await setDoc(
+        doc(db, 'registered_emails', normalizedEmail),
+        {
+          uid: user.uid,
+          registered: true
+        }
+      );
+    } catch (dbErr) {
+      console.warn('Failed to write to registered_emails:', dbErr);
+    }
+
+    showToastMsg('Account created successfully!', 'success');
+    onAuthSuccess(user.uid);
+
+  } catch (err: any) {
+    console.error(err);
+
+    let msg = 'Registration failed.';
+
+    if (err.code === 'auth/email-already-in-use') {
+      msg =
+        'An account already exists with this email. Please log in instead.';
+    } else if (err.code === 'auth/invalid-email') {
+      msg = 'Please enter a valid email address.';
+    } else if (err.code === 'auth/weak-password') {
+      msg = 'Password is too weak. Must be at least 6 characters.';
+    } else if (err.code === 'auth/operation-not-allowed') {
+      msg =
+        'Email/Password sign-up is not enabled in Firebase Console.';
+      setProviderError({ provider: 'Email/Password' });
+    } else if (err.code === 'auth/network-request-failed') {
+      msg = 'Network error. Please check your connection.';
+    }
+
+    showToastMsg(msg, 'error');
+
+  } finally {
+    setLoading(false);
+  }
+};
   // Password reset submit
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

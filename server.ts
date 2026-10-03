@@ -223,8 +223,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+ app.listen(PORT, "0.0.0.0", () => {
+  console.log("");
+  console.log("▲ BudgetBloom");
+  console.log("- Local:   http://localhost:3000");
+  console.log("- Network: http://localhost:3000");
+  console.log("✓ Ready");
+
   });
 }
 
