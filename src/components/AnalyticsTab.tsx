@@ -444,7 +444,7 @@ export default function AnalyticsTab({
                       <Cell 
                         key={`cell-${index}`} 
                         fill={entry.NetFlow >= 0 ? '#00B894' : '#EF4444'} 
-                        radius={entry.NetFlow >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3]}
+                        radius={3}
                       />
                     ))}
                   </Bar>

@@ -112,7 +112,7 @@ export default function ProfileTab({
       setBudgetWarnings(profile.preferences?.budgetWarnings ?? true);
       setThresholdAlerts(profile.preferences?.thresholdAlerts ?? true);
     }
-  }, [profile?.uid]);
+  }, [profile]);
 
   // Handle standard preferences form submit
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -138,7 +138,8 @@ export default function ProfileTab({
 
       // 2. Sync to Firestore Database user preferences
       await createOrUpdateProfile(profile.uid, {
-        displayName,
+        displayName: displayName.trim(),
+        name: displayName.trim(),
         currency: selectedCurrency,
         theme: darkMode ? 'dark' : 'light',
         photoURL: photoURL || null,

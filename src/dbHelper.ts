@@ -201,24 +201,11 @@ export async function createOrUpdateProfile(userId: string, profile: Partial<Use
     if (profile.theme !== undefined) payload.theme = profile.theme;
     if (profile.createdAt !== undefined) payload.createdAt = profile.createdAt;
     if (profile.preferences !== undefined) payload.preferences = profile.preferences;
-
+    
     await setDoc(ref, payload, { merge: true });
-
-    // Determine if it is account initialization vs profile preferences save
-    const text = (profile.createdAt !== undefined)
-      ? `Account Created: Welcome to BudgetBloom!`
-      : `Profile Updated: Saved settings and core financial preferences`;
-
-    await addDoc(collection(db, 'users', userId, 'notifications'), {
-      userId,
-      text,
-      type: 'info',
-      read: false,
-      createdAt: new Date().toISOString()
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
-  }
+} catch (error) {
+  handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
+}
 }
 
 export async function addTransaction(transaction: Omit<Transaction, 'id' | 'createdAt'>) {
@@ -232,6 +219,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'crea
 
   try {
     const nowStr = new Date().toISOString();
+
     await addDoc(collection(db, 'users', userId, 'transactions'), {
       ...transaction,
       userId,
@@ -240,6 +228,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'crea
     });
 
     const prefix = transaction.type === 'income' ? 'Income' : 'Expense';
+
     await addDoc(collection(db, 'users', userId, 'notifications'), {
       userId,
       text: `${prefix} Added: '${transaction.description}' of ₹${transaction.amount.toLocaleString()} under ${transaction.category}`,
@@ -252,6 +241,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'crea
     await addOfflineTransaction(userId, transaction);
   }
 }
+
 
 export async function syncOfflineTransactions(userId: string): Promise<{ successCount: number; totalCount: number }> {
   try {

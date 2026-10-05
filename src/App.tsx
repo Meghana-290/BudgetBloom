@@ -489,7 +489,7 @@ export default function App() {
 
           // 3. Advance to the next due date based on frequency or disable if one-time
           let nextDueDate = rem.dueDate;
-          let keepEnabled = rem.enabled;
+          let keepEnabled: boolean = rem.enabled;
 
           if (rem.frequency === 'one-time') {
             keepEnabled = false;
